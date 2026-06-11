@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拍立得照片墙 · 管理后台</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; }
+  :root {
+    --accent: #e8856c;
+    --accent-hover: #d4704f;
+    --text-dark: #3a3a3a;
+    --text-light: #888;
+    --bg: #f0ebe3;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 32px; color: var(--text-dark);
+    margin-bottom: 24px; display: flex; align-items: center; gap: 12px;
+  }
+  .card {
+    background: white; border-radius: 12px; padding: 24px;
+    margin-bottom: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .card h2 { font-size: 16px; color: var(--text-dark); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card p { font-size: 13px; color: var(--text-light); margin-bottom: 16px; line-height: 1.6; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+  }
+  .status-badge.online { background: #e8f5e9; color: #2e7d32; }
+  .status-badge.offline { background: #fff3e0; color: #e65100; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 20px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: white; color: var(--text-dark); border: 1px solid rgba(0,0,0,0.1); }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-danger { background: #d32f2f; color: white; }
+  .btn-danger:hover { background: #b71c1c; }
+  .input-group { margin-bottom: 16px; }
+  .input-group label { display: block; font-size: 13px; font-weight: 500; color: var(--text-dark); margin-bottom: 6px; }
+  .input-group input {
+    width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; font-family: monospace;
+  }
+  .input-group input:focus { outline: none; border-color: var(--accent); }
+  .input-group .hint { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+  .blob-id-display {
+    background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 12px 16px; font-family: monospace; font-size: 13px;
+    word-break: break-all; margin-bottom: 12px; position: relative;
+  }
+  .blob-id-display .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--accent); color: white; border: none;
+    padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+  }
+  .photo-list { max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 8px; }
+  .photo-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; border-bottom: 1px solid #f5f5f5;
+  }
+  .photo-item:last-child { border-bottom: none; }
+  .photo-item img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; }
+  .photo-item .info { flex: 1; min-width: 0; }
+  .photo-item .info .caption { font-size: 13px; color: var(--text-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .photo-item .info .meta { font-size: 11px; color: var(--text-light); }
+  .photo-item .delete-btn {
+    background: none; border: none; color: #d32f2f;
+    cursor: pointer; font-size: 16px; padding: 4px; opacity: 0.5;
+  }
+  .photo-item .delete-btn:hover { opacity: 1; }
+  .toast {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    background: var(--text-dark); color: white; padding: 10px 24px; border-radius: 8px;
+    font-size: 13px; z-index: 2000; opacity: 0; transition: all 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--accent); text-decoration: none; font-size: 13px; margin-bottom: 16px;
+  }
+  .back-link:hover { text-decoration: underline; }
+  .step { display: flex; gap: 12px; margin-bottom: 16px; }
+  .step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-content { flex: 1; }
+  .step-content strong { font-size: 14px; color: var(--text-dark); display: block; margin-bottom: 4px; }
+  .step-content span { font-size: 12px; color: var(--text-light); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <a href="album.html" class="back-link">← 返回照片墙</a>
+  <h1>🔧 管理后台</h1>
+
+  <!-- Cloud Sync Status -->
+  <div class="card" id="statusCard">
+    <h2>☁️ 云同步状态</h2>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <span class="status-badge online" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">已连接</span>
+      </span>
+      <span id="photoCountText" style="font-size:13px;color:var(--text-light);">0 张照片</span>
+    </div>
+    <p id="statusDesc">所有设备共享同一批照片，自动同步。</p>
+  </div>
+
+  <!-- Cloud Blob Info -->
+  <div class="card" id="blobIdCard">
+    <h2>📋 云存储信息</h2>
+    <p>这是云端存储的唯一标识。album.html 已内置此 ID，所有设备打开同一链接即可自动同步。</p>
+    <div class="blob-id-display" id="blobIdDisplay">
+      <button class="copy-btn" onclick="copyBlobId()">复制</button>
+      <span id="blobIdText"></span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-secondary" onclick="refreshFromAdmin()">🔄 同步最新数据</button>
+      <button class="btn btn-danger" onclick="handleResetCloud()">⚠️ 更换云存储</button>
+    </div>
+  </div>
+
+  <!-- Create New Cloud -->
+  <div class="card" id="newCloudCard" style="display:none;">
+    <h2>🆕 创建新的云存储</h2>
+    <p>当前云存储数据丢失或需要重置时，可以创建一个新的。</p>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <strong>创建新云存储</strong>
+        <span>在 jsonblob.com 创建一个新的数据存储</span>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <strong>更新 album.html</strong>
+        <span>将新的 Blob ID 填入 album.html 中，所有人刷新即可同步</span>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="createCloudBtn" onclick="handleCreateCloud()">
+      ☁️ 创建新的云存储
+    </button>
+  </div>
+
+  <!-- Photo Management -->
+  <div class="card">
+    <h2>📸 照片管理（<span id="adminPhotoCount">0</span> 张）</h2>
+    <div class="photo-list" id="photoList">
+      <div style="text-align:center;padding:24px;color:var(--text-light);font-size:13px;">
+        暂无照片
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob';
+const CURRENT_BLOB_ID = '019eb509-5254-7c75-adb8-89c4b522b524';
+
+let photos = [];
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('blobIdText').textContent = CURRENT_BLOB_ID;
+  loadCloudPhotos();
+});
+
+async function loadCloudPhotos() {
+  try {
+    const resp = await fetch(`${JSONBLOB_API}/${CURRENT_BLOB_ID}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      photos = data.photos || [];
+      updateUI();
+    } else {
+      showToast('⚠️ 无法读取云端数据，请检查 Blob ID 是否正确');
+    }
+  } catch(e) {
+    showToast('⚠️ 网络错误，无法连接云端');
+  }
+}
+
+function updateUI() {
+  document.getElementById('photoCountText').textContent = `${photos.length} 张照片`;
+  document.getElementById('adminPhotoCount').textContent = photos.length;
+  renderPhotoList();
+}
+
+function renderPhotoList() {
+  const list = document.getElementById('photoList');
+  if (photos.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-light);font-size:13px;">暂无照片</div>';
+    return;
+  }
+  list.innerHTML = '';
+  photos.forEach((photo, index) => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    const dateStr = photo.timestamp ? new Date(photo.timestamp).toLocaleString() : '';
+    item.innerHTML = `
+      <img src="${photo.url}" alt="">
+      <div class="info">
+        <div class="caption">${photo.caption || '无标题'}</div>
+        <div class="meta">${photo.uploader ? 'by ' + photo.uploader : ''} ${dateStr}</div>
+      </div>
+      <button class="delete-btn" onclick="deletePhoto(${index})" title="删除">🗑</button>
+    `;
+    list.appendChild(item);
+  });
+}
+
+async function handleCreateCloud() {
+  const btn = document.getElementById('createCloudBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 创建中...';
+
+  try {
+    const resp = await fetch(JSONBLOB_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photos: photos, updatedAt: Date.now() })
+    });
+
+    if (resp.ok) {
+      const location = resp.headers.get('Location') || resp.headers.get('location');
+      let newBlobId = '';
+      if (location) {
+        newBlobId = location.split('/').pop();
+      }
+
+      if (newBlobId) {
+        showToast(`✅ 新云存储创建成功！新 Blob ID: ${newBlobId}`);
+        showToast(`⚠️ 请让开发者将 album.html 中的 CLOUD_BLOB_ID 更新为: ${newBlobId}`);
+        document.getElementById('newCloudCard').style.display = 'none';
+      } else {
+        showToast('❌ 创建失败：无法获取 Blob ID');
+      }
+    } else {
+      showToast(`❌ 创建失败：HTTP ${resp.status}`);
+    }
+  } catch(e) {
+    showToast(`❌ 创建失败：${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '☁️ 创建新的云存储';
+  }
+}
+
+async function refreshFromAdmin() {
+  await loadCloudPhotos();
+  showToast('🔄 已从云端同步最新数据');
+}
+
+async function deletePhoto(index) {
+  if (!confirm('确定要删除这张照片吗？\n\n删除后所有设备都会同步删除。')) return;
+
+  photos.splice(index, 1);
+
+  try {
+    const resp = await fetch(`${JSONBLOB_API}/${CURRENT_BLOB_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photos: photos, updatedAt: Date.now() })
+    });
+
+    if (resp.ok) {
+      showToast('🗑 照片已删除并同步到云端');
+    } else {
+      showToast('🗑 照片已删除（云端同步失败）');
+    }
+  } catch(e) {
+    showToast('🗑 照片已删除（云端同步失败）');
+  }
+
+  updateUI();
+}
+
+function handleResetCloud() {
+  if (!confirm('确定要更换云存储吗？\n\n这不会删除云端数据，但会断开当前连接。\n\n更换后需要重新配置 album.html。')) return;
+  document.getElementById('newCloudCard').style.display = 'block';
+  showToast('请创建新的云存储，然后将新的 Blob ID 告知开发者');
+}
+
+function copyBlobId() {
+  navigator.clipboard.writeText(CURRENT_BLOB_ID).then(() => {
+    showToast('✅ Blob ID 已复制到剪贴板');
+  }).catch(() => {
+    const textarea = document.createElement('textarea');
+    textarea.value = CURRENT_BLOB_ID;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    showToast('✅ Blob ID 已复制');
+  });
+}
+
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
