@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拍立得照片墙 · 迈向未来</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing: border-box; }
+  :root {
+    --polaroid-bg: #fefcf3;
+    --polaroid-shadow: rgba(0,0,0,0.15);
+    --wall-bg: #f0ebe3;
+    --accent: #e8856c;
+    --accent-hover: #d4704f;
+    --text-dark: #3a3a3a;
+    --text-light: #888;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Segoe UI', sans-serif;
+    background: var(--wall-bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(210,190,160,0.3) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(200,180,150,0.2) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(220,200,170,0.2) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .header {
+    position: sticky; top:0; z-index:100;
+    background: rgba(240,235,227,0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .header-title { display: flex; align-items: center; gap: 12px; }
+  .header-title h1 {
+    font-family: 'Caveat', cursive;
+    font-size: 28px; color: var(--text-dark); font-weight: 700;
+  }
+  .header-title .subtitle { font-size: 13px; color: var(--text-light); font-weight: 300; }
+  .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+  .btn-secondary { background: white; color: var(--text-dark); border:1px solid rgba(0,0,0,0.1); }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .photo-count {
+    font-size: 13px; color: var(--text-light);
+    padding: 6px 12px; background: rgba(0,0,0,0.04); border-radius: 20px;
+  }
+  .sync-indicator { font-size: 11px; color: var(--text-light); display: flex; align-items: center; gap: 4px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #4caf50; }
+  .sync-dot.offline { background: #ff9800; }
+  .sync-dot.syncing { background: #2196f3; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  .drop-overlay {
+    position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(232,133,108,0.15); border: 3px dashed var(--accent);
+    z-index: 999; display: none; align-items: center; justify-content: center;
+  }
+  .drop-overlay.active { display: flex; }
+  .drop-overlay-text {
+    font-family: 'Caveat', cursive; font-size: 32px; color: var(--accent);
+    background: white; padding: 24px 48px; border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  }
+  .photo-wall {
+    position: relative; z-index: 1; padding: 24px;
+    column-count: 4; column-gap: 20px;
+  }
+  @media (max-width: 1200px) { .photo-wall { column-count: 3; } }
+  @media (max-width: 768px) { .photo-wall { column-count: 2; padding: 12px; column-gap: 12px; } }
+  @media (max-width: 480px) { .photo-wall { column-count: 1; } }
+  .polaroid {
+    break-inside: avoid; margin-bottom: 20px;
+    background: var(--polaroid-bg); padding: 10px 10px 44px 10px;
+    border-radius: 2px; box-shadow: 2px 3px 12px var(--polaroid-shadow);
+    cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; position: relative;
+    animation: fadeIn 0.5s ease-out;
+  }
+  .polaroid:hover {
+    transform: scale(1.03) rotate(0deg) !important;
+    box-shadow: 4px 6px 20px rgba(0,0,0,0.2); z-index: 10;
+  }
+  .polaroid img { width: 100%; display: block; border-radius: 1px; }
+  .polaroid .caption {
+    position: absolute; bottom: 10px; left: 14px; right: 14px;
+    font-family: 'Caveat', cursive; font-size: 15px; color: var(--text-light);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .empty-state { text-align: center; padding: 80px 24px; color: var(--text-light); column-span: all; }
+  .empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+  .empty-state h2 { font-family: 'Caveat', cursive; font-size: 28px; color: var(--text-dark); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; margin-bottom: 24px; }
+  .lightbox {
+    position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.85); z-index: 1000;
+    display: none; align-items: center; justify-content: center; padding: 40px;
+  }
+  .lightbox.active { display: flex; }
+  .lightbox img { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 4px; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
+  .lightbox-close {
+    position: absolute; top: 20px; right: 20px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+  .lightbox-prev { left: 20px; }
+  .lightbox-next { right: 20px; }
+  .lightbox-caption {
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+    font-family: 'Caveat', cursive; font-size: 18px; color: rgba(255,255,255,0.8);
+    background: rgba(0,0,0,0.4); padding: 6px 20px; border-radius: 20px;
+  }
+  .upload-progress {
+    position: fixed; bottom: 24px; right: 24px;
+    background: white; border-radius: 12px; padding: 16px 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15); z-index: 500;
+    display: none; min-width: 240px;
+  }
+  .upload-progress.active { display: block; }
+  .upload-progress h4 { font-size: 13px; color: var(--text-dark); margin-bottom: 8px; }
+  .progress-bar { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; width: 0%; }
+  .toast {
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%) translateY(-20px);
+    background: var(--text-dark); color: white; padding: 10px 24px; border-radius: 8px;
+    font-size: 13px; z-index: 2000; opacity: 0; transition: all 0.3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .admin-link { font-size: 11px; color: var(--text-light); text-decoration: none; opacity: 0.6; transition: opacity 0.2s; }
+  .admin-link:hover { opacity: 1; }
+  .modal-overlay {
+    position: fixed; top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.4); z-index: 1500;
+    display: none; align-items: center; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal-box { background: white; border-radius: 16px; padding: 32px; max-width: 380px; width: 90%; text-align: center; }
+  .modal-box h3 { font-size: 18px; color: var(--text-dark); margin-bottom: 8px; }
+  .modal-box p { font-size: 13px; color: var(--text-light); margin-bottom: 20px; }
+  .modal-box input {
+    width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 15px; text-align: center; margin-bottom: 16px; font-family: inherit;
+  }
+  .modal-box input:focus { outline: none; border-color: var(--accent); }
+  .loading-state { text-align: center; padding: 60px 24px; color: var(--text-light); column-span: all; }
+  .loading-state .spinner {
+    display: inline-block; width: 24px; height: 24px;
+    border: 3px solid #eee; border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.6s linear infinite; margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">
+    <h1>📸 拍立得照片墙</h1>
+    <span class="subtitle">迈向未来 · 我们的公开相册</span>
+  </div>
+  <div class="header-actions">
+    <span class="photo-count" id="photoCount">加载中...</span>
+    <div class="sync-indicator" id="syncIndicator">
+      <span class="sync-dot syncing" id="syncDot"></span>
+      <span id="syncText">同步中</span>
+    </div>
+    <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">➕ 上传照片</button>
+    <button class="btn btn-secondary" onclick="refreshFromCloud()" title="刷新">🔄</button>
+    <a href="admin.html" class="admin-link">管理</a>
+    <input type="file" id="fileInput" multiple accept="image/*" style="display:none" onchange="handleFileUpload(this.files)">
+  </div>
+</div>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-overlay-text">📸 松开鼠标导入照片</div>
+</div>
+
+<div class="photo-wall" id="photoWall">
+  <div class="loading-state" id="loadingState">
+    <div class="spinner"></div>
+    <p>正在从云端加载照片...</p>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox(event)">
+  <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+  <button class="lightbox-nav lightbox-prev" onclick="navigateLightbox(-1, event)">&#8249;</button>
+  <img id="lightboxImg" src="" alt="">
+  <button class="lightbox-nav lightbox-next" onclick="navigateLightbox(1, event)">&#8250;</button>
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+
+<div class="upload-progress" id="uploadProgress">
+  <h4>上传中... <span id="uploadCount">0/0</span></h4>
+  <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+</div>
+
+<div class="modal-overlay" id="nicknameModal">
+  <div class="modal-box">
+    <h3>👋 欢迎来到照片墙</h3>
+    <p>留下你的名字，让大家知道谁上传了照片</p>
+    <input type="text" id="nicknameInput" placeholder="输入你的昵称" maxlength="20" autofocus>
+    <button class="btn btn-primary" onclick="saveNickname()" style="width:100%">进入相册</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============ Config ============
+const IMGBB_API_KEY = '716421064eb9f550821e56d0eaedc560';
+const MAX_PHOTOS = 500;
+
+// Cloud sync: ALL devices share this same Blob ID → automatic cross-device sync!
+const CLOUD_BLOB_ID = '019eb509-5254-7c75-adb8-89c4b522b524';
+const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob';
+
+// ============ State ============
+let photos = [];
+let currentLightboxIndex = -1;
+let currentUser = '';
+let isSyncing = false;
+let autoRefreshTimer = null;
+
+// ============ Init ============
+document.addEventListener('DOMContentLoaded', () => {
+  loadLocalSettings();
+  checkUser();
+  initCloudSync();
+  setupDragDrop();
+});
+
+// ============ Settings ============
+function loadLocalSettings() {
+  try {
+    const settings = JSON.parse(localStorage.getItem('polaroid_settings') || '{}');
+    currentUser = settings.nickname || '';
+  } catch(e) {}
+}
+
+function saveLocalSettings() {
+  const settings = { nickname: currentUser };
+  localStorage.setItem('polaroid_settings', JSON.stringify(settings));
+}
+
+// ============ User ============
+function checkUser() {
+  if (!currentUser) {
+    document.getElementById('nicknameModal').classList.add('active');
+    document.getElementById('nicknameInput').focus();
+  }
+}
+
+function saveNickname() {
+  const name = document.getElementById('nicknameInput').value.trim();
+  if (!name) { showToast('请输入昵称'); return; }
+  currentUser = name;
+  saveLocalSettings();
+  document.getElementById('nicknameModal').classList.remove('active');
+  showToast(`欢迎，${name}! 🎉`);
+}
+
+// ============ Cloud Sync ============
+async function initCloudSync() {
+  updateSyncUI('syncing');
+  await refreshFromCloud();
+  // Auto-refresh every 15s
+  autoRefreshTimer = setInterval(refreshFromCloud, 15000);
+}
+
+async function refreshFromCloud() {
+  if (isSyncing) return;
+  isSyncing = true;
+  updateSyncUI('syncing');
+
+  try {
+    const resp = await fetch(`${JSONBLOB_API}/${CLOUD_BLOB_ID}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const cloudPhotos = data.photos || [];
+      photos = cloudPhotos;
+      localStorage.setItem('polaroid_photos', JSON.stringify(photos));
+      updateSyncUI('online');
+    } else {
+      // Fallback to local
+      loadLocalPhotos();
+      updateSyncUI('offline');
+    }
+  } catch(e) {
+    loadLocalPhotos();
+    updateSyncUI('offline');
+  } finally {
+    isSyncing = false;
+  }
+
+  renderWall();
+}
+
+async function syncToCloud() {
+  if (isSyncing) return;
+  isSyncing = true;
+
+  try {
+    const resp = await fetch(`${JSONBLOB_API}/${CLOUD_BLOB_ID}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photos: photos, updatedAt: Date.now() })
+    });
+    updateSyncUI(resp.ok ? 'online' : 'offline');
+  } catch(e) {
+    updateSyncUI('offline');
+  } finally {
+    isSyncing = false;
+  }
+}
+
+function updateSyncUI(status) {
+  const dot = document.getElementById('syncDot');
+  const text = document.getElementById('syncText');
+  if (status === 'online') {
+    dot.className = 'sync-dot';
+    text.textContent = '已同步';
+  } else if (status === 'syncing') {
+    dot.className = 'sync-dot syncing';
+    text.textContent = '同步中';
+  } else {
+    dot.className = 'sync-dot offline';
+    text.textContent = '本地';
+  }
+}
+
+function loadLocalPhotos() {
+  try {
+    const data = localStorage.getItem('polaroid_photos');
+    photos = data ? JSON.parse(data) : [];
+  } catch(e) { photos = []; }
+}
+
+function savePhotosLocal() {
+  try { localStorage.setItem('polaroid_photos', JSON.stringify(photos)); } catch(e) {}
+}
+
+// ============ Render ============
+function renderWall() {
+  const wall = document.getElementById('photoWall');
+  const countEl = document.getElementById('photoCount');
+  countEl.textContent = `${photos.length} 张照片`;
+
+  if (photos.length === 0) {
+    wall.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = `
+      <div class="icon">📸</div>
+      <h2>还没有照片</h2>
+      <p>拖拽照片到这里，或点击上方按钮上传</p>
+      <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">上传第一张照片</button>
+    `;
+    wall.appendChild(empty);
+    return;
+  }
+
+  wall.innerHTML = '';
+  photos.forEach((photo, index) => {
+    wall.appendChild(createPolaroidCard(photo, index));
+  });
+}
+
+function createPolaroidCard(photo, index) {
+  const div = document.createElement('div');
+  div.className = 'polaroid';
+  div.style.transform = `rotate(${(Math.random()-0.5)*4}deg)`;
+
+  const img = document.createElement('img');
+  img.src = photo.url;
+  img.alt = photo.caption || '';
+  img.loading = 'lazy';
+  img.onclick = () => openLightbox(index);
+  div.appendChild(img);
+
+  const captionEl = document.createElement('div');
+  captionEl.className = 'caption';
+  const parts = [];
+  if (photo.caption) parts.push(photo.caption);
+  if (photo.uploader) parts.push(`by ${photo.uploader}`);
+  captionEl.textContent = parts.join(' · ');
+  div.appendChild(captionEl);
+
+  return div;
+}
+
+// ============ Upload ============
+async function handleFileUpload(files) {
+  if (!files || files.length === 0) return;
+
+  if (!currentUser) {
+    document.getElementById('nicknameModal').classList.add('active');
+    document.getElementById('nicknameInput').focus();
+    showToast('请先输入昵称');
+    return;
+  }
+
+  if (photos.length + files.length > MAX_PHOTOS) {
+    showToast(`最多支持 ${MAX_PHOTOS} 张照片`);
+    return;
+  }
+
+  const progressEl = document.getElementById('uploadProgress');
+  const countEl = document.getElementById('uploadCount');
+  const fillEl = document.getElementById('progressFill');
+  progressEl.classList.add('active');
+  let completed = 0;
+  const total = files.length;
+
+  for (const file of files) {
+    try {
+      const url = await uploadToImgBB(file);
+      if (url) {
+        const now = new Date();
+        const timeCaption = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        photos.unshift({
+          url: url,
+          caption: timeCaption,
+          uploader: currentUser,
+          timestamp: Date.now()
+        });
+        completed++;
+        countEl.textContent = `${completed}/${total}`;
+        fillEl.style.width = `${(completed / total) * 100}%`;
+        savePhotosLocal();
+        renderWall();
+      }
+    } catch(e) {
+      console.error('Upload failed:', e);
+    }
+  }
+
+  await syncToCloud();
+  progressEl.classList.remove('active');
+  showToast(`成功上传 ${completed} 张照片! 🎉`);
+  document.getElementById('fileInput').value = '';
+}
+
+async function uploadToImgBB(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      try {
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64);
+        const resp = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) { resolve(data.data.display_url); return; }
+      } catch(e) {}
+      resolve(reader.result); // fallback to data URL
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+// ============ Drag & Drop ============
+function setupDragDrop() {
+  let dragCounter = 0;
+  document.addEventListener('dragenter', (e) => { e.preventDefault(); dragCounter++; document.getElementById('dropOverlay').classList.add('active'); });
+  document.addEventListener('dragleave', (e) => { e.preventDefault(); dragCounter--; if (dragCounter <= 0) { dragCounter = 0; document.getElementById('dropOverlay').classList.remove('active'); } });
+  document.addEventListener('dragover', (e) => { e.preventDefault(); });
+  document.addEventListener('drop', (e) => {
+    e.preventDefault(); dragCounter = 0; document.getElementById('dropOverlay').classList.remove('active');
+    if (e.dataTransfer.files.length > 0) handleFileUpload(e.dataTransfer.files);
+  });
+}
+
+// ============ Lightbox ============
+function openLightbox(index) {
+  currentLightboxIndex = index;
+  const photo = photos[index];
+  document.getElementById('lightboxImg').src = photo.url;
+  const captionText = photo.caption || '';
+  const uploaderText = photo.uploader ? ` · by ${photo.uploader}` : '';
+  document.getElementById('lightboxCaption').textContent = captionText + uploaderText;
+  document.getElementById('lightbox').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById('lightbox').classList.remove('active');
+  document.body.style.overflow = '';
+  currentLightboxIndex = -1;
+}
+
+function navigateLightbox(direction, event) {
+  if (event) event.stopPropagation();
+  const newIndex = currentLightboxIndex + direction;
+  if (newIndex >= 0 && newIndex < photos.length) openLightbox(newIndex);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (currentLightboxIndex === -1) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowLeft') navigateLightbox(-1);
+  if (e.key === 'ArrowRight') navigateLightbox(1);
+});
+
+// ============ Toast ============
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
